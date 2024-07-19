@@ -1,0 +1,152 @@
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;32bit/32bit Unsigned Division
+; tested works fine
+; Register Variables
+;  Call:  var1[3:0] = dividend (0x00000000..0xffffffff)
+;         var2[3:0] = divisor (0x00000001..0x7fffffff)
+;         mod[3:0]  = <don't care>
+;         lc        = <don't care> (high register must be allocated)
+;
+;  Result:var1[3:0] = var1[3:0] / var2[3:0]
+;         var2[3:0] = <not changed>
+;         mod[3:0]  = var1[3:0] % var2[3:0]
+;         lc        = 0
+;
+; Size  = 26 words
+; Clock = 549..677 cycles (+ret)
+; Stack = 0 bytes
+;buffer1 db.s	   ;var13
+;buffer2 db.s	   ;var12
+;buffer3 db.s	   ;var11
+;buffer4 db.s	   ;var10
+;buffer5 db.s	   ;var23
+;buffer6 db.s	   ;var22
+;buffer7 db.s	   ;var21
+;buffer8 db.s	   ;var20
+;buffer9 db.s      ;modulo3
+;buffer10 db.s     ;modulo2
+;buffer11 db.s     ;modulo1
+;buffer12 db.s     ;modulo0
+;buffer13 db.s     ;counter lc
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;initialize variables
+div32u:
+	clr buffer12      	;modulo0
+	clr buffer11      	;modulo1
+	clr buffer10      	;modulo2
+	clr buffer9       	;modulo3
+	ld a,#32
+	ld buffer13,a	  	;loop counter loaded with 32
+calculating_loop:
+;var1 = var1 << 1
+	sll buffer4	  	;var10	
+	rlc buffer3	  	;var12
+	rlc buffer2 		;var11 
+	rlc buffer1	    	;var10
+;mod = mod << 1 + carry;
+	rlc buffer12      	;modulo0
+	rlc buffer11      	;modulo1
+	rlc buffer10      	;modulo2
+	rlc buffer9       	;modulo3
+;if (mod => var2) {mod -= var2; var1++;} , 
+	call transfer
+	ld a,buffer12 
+	sub a,buffer17		;sub	mod0,var20
+	ld a,buffer11
+	sbc a,buffer16	   	;sbc	mod1,var21
+	ld a,buffer10
+	sbc a,buffer15	   	;sbc	mod2,var22
+	ld a,buffer9
+	sbc a,buffer14	   	;sbc	mod3,var23
+	clr buffer17
+	clr buffer16
+	clr buffer15
+	clr buffer14
+	jrc decrease_counter
+	inc buffer4	   	;var10
+	ld a,buffer12      	;modulo0
+	sub a,buffer8	   	;sub	mod0,var20
+	ld buffer12,a
+	ld a,buffer11      	;modulo1
+	sbc a,buffer7	   	;sbc	mod1,var21
+	ld buffer11,a	
+	ld a,buffer10      	;modulo2
+	sbc a,buffer6	   	;sbc	mod2,var22
+	ld buffer10,a
+	ld a,buffer9       	;modulo3
+	sbc a,buffer5	   	;sbc	mod3,var23
+	ld buffer9,a
+decrease_counter:
+	dec buffer13	   	;counter
+	jrne calculating_loop
+	ret
+transfer:
+	ldw x,buffer7
+	ldw buffer16,x
+	ldw x,buffer5
+	ldw buffer14,x
+	ret
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+division1616:
+;.def	drem16uL=r14     buffer2
+;.def	dres16uL=r16	 buffer4
+;.def	dres16uH=r17	 buffer3
+;.def	dd16uL	=r16	 buffer6
+;.def	dd16uH	=r17	 buffer5
+;.def	dv16uL	=r18	 buffer8
+;.def	dv16uH	=r19	 buffer7
+;.def	dcnt16u	=r20	 buffer9
+
+div16u:
+	clr buffer2
+	clr buffer1
+	ld a,#17
+	ld buffer9,a
+d16u_1:
+	rlc buffer6		;dd16uL
+	rlc buffer5		;dd16uH
+	dec buffer9		;dcnt16u
+	jrne d16u_2
+	ret
+d16u_2:
+	rlc buffer2		;drem16uL
+	rlc buffer1		;drem16uH
+	;sub	drem16uL,dv16uL		;remainder = remainder - divisor
+	ld a,buffer2		;drem16uL
+	sub a,buffer8		;dv16uL	
+	ld buffer2,a		;drem16uL
+	;sbc	drem16uH,	
+	ld a,buffer1		;drem16uH
+	sbc a,buffer7		;drem16uH-dv16uH
+	ld buffer1,a		;drem16uH
+	jrnc d16u_3
+	;add	drem16uL,dv16uL        add buffer2,buffer8  =
+	ld a,buffer2		;drem16uL
+	add a,buffer8		;dv16uL
+	ld buffer2,a		;drem16uL
+	;adc	drem16uH,dv16uH			adc buffer1,buffer7
+	ld a,buffer1		;drem16uH
+	adc a,buffer7		;dv16uH
+	ld buffer1,a		;drem16uH
+	rcf
+	jp d16u_1
+d16u_3:
+	scf
+	jp d16u_1
